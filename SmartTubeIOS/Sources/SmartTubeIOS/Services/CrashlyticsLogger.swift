@@ -17,6 +17,17 @@ public struct CrashlyticsLogger: Sendable {
     /// is a fatal error, not a silent no-op.
     public nonisolated(unsafe) static var isEnabled = true
 
+    /// True when the app bundles a real GoogleService-Info.plist. Forks build with the
+    /// placeholder copy of GoogleService-Info.plist.example, and FirebaseApp.configure()
+    /// must not run on that.
+    public static var hasFirebaseConfig: Bool {
+        guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+            let config = NSDictionary(contentsOfFile: path),
+            let key = config["API_KEY"] as? String
+        else { return false }
+        return !key.isEmpty && !key.hasPrefix("YOUR_")
+    }
+
     /// Short identifier (8 hex chars) generated once per app session, independent of
     /// `isEnabled` — it's shown in the Stats for Nerds debug overlay purely as a local
     /// reference number even when analytics reporting is off.
