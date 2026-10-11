@@ -368,6 +368,7 @@ extension PlayerView {
                             .accessibilityIdentifier("player.captionPicker.track.\(track.id)")
                             Divider()
                         }
+                        dualSubtitleRows
                     }
                 }
                 .frame(maxHeight: 360)

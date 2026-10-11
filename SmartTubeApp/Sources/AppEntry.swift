@@ -60,7 +60,11 @@ struct AppEntry: App {
         // methods know to skip Crashlytics.crashlytics() instead of hitting the fatal
         // "default app not configured" error.
         let settingsStore = SettingsStore()
-        CrashlyticsLogger.isEnabled = !settingsStore.settings.disableAnalytics
+        // Builds without the maintainer's GoogleService-Info.plist (forks) must not call
+        // FirebaseApp.configure(): it raises at launch when the plist is missing.
+        CrashlyticsLogger.isEnabled =
+            !settingsStore.settings.disableAnalytics
+            && Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil
         if CrashlyticsLogger.isEnabled {
             FirebaseApp.configure()
         }

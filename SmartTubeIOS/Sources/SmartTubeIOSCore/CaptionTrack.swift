@@ -19,6 +19,15 @@ public struct CaptionCue: Sendable {
     public let startTime: TimeInterval
     public let endTime: TimeInterval
     public let text: String
+    /// The cue's translation, for dual subtitles (see `DualSubtitles.swift`).
+    public var translation: String?
+
+    public init(startTime: TimeInterval, endTime: TimeInterval, text: String, translation: String? = nil) {
+        self.startTime = startTime
+        self.endTime = endTime
+        self.text = text
+        self.translation = translation
+    }
 }
 
 // MARK: - WebVTTParser

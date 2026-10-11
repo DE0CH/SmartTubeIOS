@@ -1,0 +1,137 @@
+name: DE0CH TestFlight
+# The DE0CH fork's build: re-identify the app for team S64YL394S3 (scripts/de0ch/identity.sh),
+# run the dual-subtitle unit tests, play a Japanese video on an iPhone simulator and screenshot
+# the captions, then archive iOS + tvOS unsigned and upload them to TestFlight
+# (the export cloud-signs with Apple's managed distribution certificate via the ASC API key).
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "all, or only the TestFlight job"
+        type: choice
+        options: [all, testflight]
+        default: all
+concurrency:
+  group: de0ch-testflight-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  SIM: iPhone 17
+  VIDEO: 1rk_lVTmk0Y   # ANN news clip with Japanese auto-generated captions
+jobs:
+  check:
+    if: inputs.only != 'testflight'
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode (newest on the runner)
+        run: |
+          x=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1); echo "$x"; sudo xcode-select -s "$x"
+          xcrun simctl list devices available | grep -E "iPhone|Apple TV" | head
+      - name: Identity
+        run: sudo gem install xcodeproj --no-document && scripts/de0ch/identity.sh
+      - name: Unit tests (dual subtitles + captions manager, iOS simulator)
+        working-directory: SmartTubeIOS
+        run: |
+          set -o pipefail
+          xcodebuild test -scheme SmartTubeIOS-Package -destination "platform=iOS Simulator,name=$SIM" \
+            -only-testing:SmartTubeIOSTests/DualSubtitlesTests -only-testing:SmartTubeIOSTests/CaptionsManagerTests \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee ../unit.log | grep -E "error:|✔|✘|Test run|passed|failed|\*\* " || true
+          grep -qE "\*\* TEST SUCCEEDED|Test run with .* passed" ../unit.log
+      - name: Build the app for the simulator
+        run: |
+          set -o pipefail
+          xcodebuild build -workspace SmartTube.xcworkspace -scheme SmartTube -destination "platform=iOS Simulator,name=$SIM" \
+            -derivedDataPath dd CODE_SIGNING_ALLOWED=NO 2>&1 | tee build.log | grep -E "error:|\*\* " || true
+          grep -q "BUILD SUCCEEDED" build.log
+      - name: Build tvOS for the simulator
+        run: |
+          set -o pipefail
+          xcodebuild build -workspace SmartTube.xcworkspace -scheme "Smart Tube" -destination "generic/platform=tvOS Simulator" \
+            -derivedDataPath dd-tv CODE_SIGNING_ALLOWED=NO 2>&1 | tee build-tv.log | grep -E "error:|\*\* " || true
+          grep -q "BUILD SUCCEEDED" build-tv.log
+      - name: Play a Japanese video, screenshot the captions
+        run: |
+          mkdir -p out
+          xcrun simctl boot "$SIM" || true
+          xcrun simctl bootstatus "$SIM" -b
+          app=$(ls -d dd/Build/Products/Debug-iphonesimulator/SmartTube.app)
+          xcrun simctl install "$SIM" "$app"
+          bid=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app/Info.plist")
+          nohup xcrun simctl spawn "$SIM" log stream --style compact --predicate "subsystem BEGINSWITH 'dev.de0ch'" > out/app.log 2>&1 &
+          xcrun simctl launch "$SIM" "$bid"
+          sleep 15
+          xcrun simctl openurl "$SIM" "smarttube://video/$VIDEO"
+          for i in $(seq 1 12); do sleep 10; xcrun simctl io "$SIM" screenshot "out/shot-$i.png" >/dev/null 2>&1 || true; done
+          xcrun simctl ui "$SIM" appearance dark || true
+      - name: Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: check
+          path: |
+            out
+            unit.log
+            build.log
+            build-tv.log
+
+  testflight:
+    if: always() && github.ref == 'refs/heads/master' && (inputs.only == 'testflight' || needs.check.result == 'success')
+    needs: [check]
+    runs-on: macos-26
+    timeout-minutes: 120
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode (newest on the runner)
+        run: x=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1); sudo xcode-select -s "$x"
+      - name: Identity
+        run: sudo gem install xcodeproj --no-document && scripts/de0ch/identity.sh
+      - name: API key
+        env:
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: mkdir -p ~/.asc && printf '%s\n' "$ASC_PRIVATE_KEY" > ~/.asc/AuthKey.p8 && chmod 600 ~/.asc/AuthKey.p8
+      - name: Archive iOS + tvOS (unsigned; the export signs in the cloud)
+        run: |
+          set -o pipefail
+          # build number: the run number, offset past upstream's own builds of 5.1
+          build=$((1000 + ${{ github.run_number }}))
+          arch() {  # scheme platform out
+            xcodebuild archive -workspace SmartTube.xcworkspace -scheme "$1" -configuration Release \
+              -destination "generic/platform=$2" -archivePath "$3" \
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM=S64YL394S3 \
+              CURRENT_PROJECT_VERSION=$build 2>&1 | tee "$3.log" | grep -E "error:|\*\* " || true
+            grep -q "ARCHIVE SUCCEEDED" "$3.log"
+          }
+          arch SmartTube iOS ios.xcarchive
+          arch "Smart Tube" tvOS tvos.xcarchive
+      - name: Export + upload to App Store Connect
+        run: |
+          cat > ExportOptions.plist <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>S64YL394S3</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          PLIST
+          set -o pipefail
+          ok=0
+          for a in ios tvos; do
+            xcodebuild -exportArchive -archivePath $a.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath export-$a \
+              -allowProvisioningUpdates -authenticationKeyPath ~/.asc/AuthKey.p8 \
+              -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" 2>&1 | tee export-$a.log | tail -25
+            grep -q "EXPORT SUCCEEDED\|Upload succeeded" export-$a.log || ok=1
+          done
+          exit $ok
+      - name: logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: testflight-logs, path: "*.log" }

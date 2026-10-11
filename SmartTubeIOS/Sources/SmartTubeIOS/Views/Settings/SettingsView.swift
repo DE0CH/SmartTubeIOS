@@ -42,6 +42,7 @@ public struct SettingsView: View {
         Form {
             accountSection
             playerSection
+            japaneseSubtitlesSection
             generalSection
             uiSection
             sponsorBlockSection
@@ -396,6 +397,32 @@ public struct SettingsView: View {
             Text("SponsorBlock")
         } footer: {
             Text("Skip \u{2014} auto-skips. Show Toast \u{2014} shows a skip button. Nothing \u{2014} plays through.")
+        }
+    }
+
+    // MARK: - Japanese subtitles
+
+    private var japaneseSubtitlesSection: some View {
+        @Bindable var store = store
+        return Section {
+            Toggle("Dual subtitles", isOn: $store.settings.dualSubtitlesEnabled)
+                .accessibilityIdentifier("settings.dualSubtitlesToggle")
+            if store.settings.dualSubtitlesEnabled {
+                Toggle("Turn on Japanese captions automatically", isOn: $store.settings.autoJapaneseCaptions)
+                Toggle("Furigana", isOn: $store.settings.furiganaEnabled)
+                Picker("Translation", selection: $store.settings.dualTranslationLanguage) {
+                    ForEach(DualSubtitleOptions.translationChoices, id: \.code) { choice in
+                        Text(choice.label).tag(choice.code)
+                    }
+                }
+                .accessibilityIdentifier("settings.dualTranslationPicker")
+            }
+        } header: {
+            Text("Japanese subtitles")
+        } footer: {
+            Text(
+                "On videos with Japanese captions, show each sentence with furigana and a translation under it. Translations come from Google Translate."
+            )
         }
     }
 

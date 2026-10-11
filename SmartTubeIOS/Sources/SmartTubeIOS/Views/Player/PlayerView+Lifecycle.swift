@@ -272,7 +272,7 @@ extension PlayerView {
                 if let cue = vm.currentCaptionCue {
                     VStack(spacing: 0) {
                         Spacer()
-                        CaptionCueView(text: cue.text)
+                        DualCaptionCueView(cue: cue, furigana: store.settings.dualSubtitlesEnabled && store.settings.furiganaEnabled)
                             // When controls are visible the scrub bar + bottom controls
                             // occupy ~130pt. Push captions above that area. When controls
                             // are hidden, a small margin from the safe-area bottom is enough.

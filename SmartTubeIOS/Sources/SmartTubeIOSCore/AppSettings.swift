@@ -145,6 +145,23 @@ public struct AppSettings: Codable {
     /// Applied automatically to each new video on load.
     public var preferredCaptionLanguage: String?
 
+    // MARK: Dual subtitles (Japanese)
+    /// Japanese caption tracks show whole sentences, with furigana and a translation line.
+    public var dualSubtitlesEnabled: Bool
+    /// Google Translate code for the translation line ("en", "zh-CN"); "" hides it.
+    /// (Not optional: a stored `null` would decode back to the default.)
+    public var dualTranslationLanguage: String
+    /// Readings above kanji on the Japanese line.
+    public var furiganaEnabled: Bool
+    /// Turn on the Japanese track by itself when a video has one.
+    public var autoJapaneseCaptions: Bool
+
+    /// The options `CaptionsManager.selectCaption` takes; `nil` when dual subtitles are off.
+    public var dualSubtitleOptions: DualSubtitleOptions? {
+        guard dualSubtitlesEnabled else { return nil }
+        return DualSubtitleOptions(translationLanguage: dualTranslationLanguage.isEmpty ? nil : dualTranslationLanguage)
+    }
+
     // MARK: DeArrow
     public var deArrowEnabled: Bool
 
@@ -308,6 +325,10 @@ public struct AppSettings: Codable {
         blockedChannels = [:]
         preferredAudioLanguage = nil
         preferredCaptionLanguage = nil
+        dualSubtitlesEnabled = true
+        dualTranslationLanguage = "en"
+        furiganaEnabled = true
+        autoJapaneseCaptions = true
         deArrowEnabled = false
         poTokenServiceURL = nil
         audioOnlyMode = false
@@ -385,6 +406,10 @@ extension AppSettings {
         case blockedChannels
         case preferredAudioLanguage
         case preferredCaptionLanguage
+        case dualSubtitlesEnabled
+        case dualTranslationLanguage
+        case furiganaEnabled
+        case autoJapaneseCaptions
         case deArrowEnabled
         case poTokenServiceURL
         case audioOnlyMode
@@ -452,6 +477,11 @@ extension AppSettings {
             String?.self, forKey: .preferredAudioLanguage, default: d.preferredAudioLanguage)
         preferredCaptionLanguage = c.safeDecode(
             String?.self, forKey: .preferredCaptionLanguage, default: d.preferredCaptionLanguage)
+        dualSubtitlesEnabled = c.safeDecode(Bool.self, forKey: .dualSubtitlesEnabled, default: d.dualSubtitlesEnabled)
+        dualTranslationLanguage = c.safeDecode(
+            String.self, forKey: .dualTranslationLanguage, default: d.dualTranslationLanguage)
+        furiganaEnabled = c.safeDecode(Bool.self, forKey: .furiganaEnabled, default: d.furiganaEnabled)
+        autoJapaneseCaptions = c.safeDecode(Bool.self, forKey: .autoJapaneseCaptions, default: d.autoJapaneseCaptions)
         deArrowEnabled = c.safeDecode(Bool.self, forKey: .deArrowEnabled, default: d.deArrowEnabled)
         poTokenServiceURL = c.safeDecode(URL?.self, forKey: .poTokenServiceURL, default: d.poTokenServiceURL)
         audioOnlyMode = c.safeDecode(Bool.self, forKey: .audioOnlyMode, default: d.audioOnlyMode)
