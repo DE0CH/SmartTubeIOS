@@ -74,10 +74,10 @@ public final class CaptionsManager {
 
     private func loadDual(_ track: CaptionTrack, _ dual: DualSubtitleOptions, _ time: TimeInterval) async {
         lastCueTime = time
-        guard let (data, _) = try? await URLSession.shared.data(from: Json3Captions.url(for: track)),
+        guard let response = try? await URLSession.shared.data(from: Json3Captions.url(for: track)),
             !Task.isCancelled
         else { return }
-        let sentences = CaptionSentences.group(Json3Captions.parse(data))
+        let sentences = CaptionSentences.group(Json3Captions.parse(response.0))
         captionCues = sentences
         updateCaptionCue(for: lastCueTime)
         guard let target = dual.translationLanguage, !sentences.isEmpty else { return }

@@ -212,8 +212,8 @@ public enum Furigana {
         return out
     }
 
-    static func hasKanji(_ s: Substring) -> Bool { s.unicodeScalars.contains(where: isKanji) }
-    static func hasKanji(_ s: String) -> Bool { s.unicodeScalars.contains(where: isKanji) }
+    /// True when `s` contains at least one kanji.
+    public static func hasKanji(_ s: String) -> Bool { s.unicodeScalars.contains(where: isKanji) }
 
     static func isKanji(_ u: Unicode.Scalar) -> Bool {
         (0x3400...0x9FFF).contains(u.value) || (0xF900...0xFAFF).contains(u.value) || u == "々" || u == "〆" || u == "ヶ"
