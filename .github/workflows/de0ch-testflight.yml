@@ -61,9 +61,8 @@ jobs:
           xcrun simctl install "$SIM" "$app"
           bid=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app/Info.plist")
           nohup xcrun simctl spawn "$SIM" log stream --style compact --predicate "subsystem BEGINSWITH 'dev.de0ch'" > out/app.log 2>&1 &
-          xcrun simctl launch "$SIM" "$bid"
-          sleep 15
-          xcrun simctl openurl "$SIM" "smarttube://video/$VIDEO"
+          # the app's own deep-link launch argument (simctl openurl stops at an "Open in…?" prompt)
+          xcrun simctl launch "$SIM" "$bid" "--uitesting-deeplink-video=$VIDEO"
           for i in $(seq 1 12); do sleep 10; xcrun simctl io "$SIM" screenshot "out/shot-$i.png" >/dev/null 2>&1 || true; done
           xcrun simctl ui "$SIM" appearance dark || true
       - name: Results
@@ -122,16 +121,22 @@ jobs:
             <key>manageAppVersionAndBuildNumber</key><false/>
           </dict></plist>
           PLIST
-          set -o pipefail
           ok=0
           for a in ios tvos; do
             xcodebuild -exportArchive -archivePath $a.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath export-$a \
               -allowProvisioningUpdates -authenticationKeyPath ~/.asc/AuthKey.p8 \
-              -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" 2>&1 | tee export-$a.log | tail -25
+              -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" > export-$a.log 2>&1 || true
+            tail -25 export-$a.log
             grep -q "EXPORT SUCCEEDED\|Upload succeeded" export-$a.log || ok=1
           done
+          # Xcode's distribution logs say why an export failed ("Error Downloading App Information")
+          mkdir -p distlogs && cp -R "${TMPDIR:-/tmp}"/*.xcdistributionlogs distlogs/ 2>/dev/null || true
           exit $ok
       - name: logs
         if: always()
         uses: actions/upload-artifact@v4
-        with: { name: testflight-logs, path: "*.log" }
+        with:
+          name: testflight-logs
+          path: |
+            *.log
+            distlogs

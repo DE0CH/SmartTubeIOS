@@ -14,6 +14,9 @@ git ls-files -z -- . ':!scripts/de0ch' | xargs -0 grep -lIZ -e 'com\.void\.smart
   | xargs -0 perl -pi -e 's/com\.void\.smarttube/dev.de0ch.smarttube/g; s/5A4JA438MW/'"$TEAM"'/g'
 perl -pi -e 's/INFOPLIST_KEY_CFBundleDisplayName = "Smart Tube";/INFOPLIST_KEY_CFBundleDisplayName = "SmartTube JP";/g' \
   SmartTubeApp/SmartTubeApp.xcodeproj/project.pbxproj
+for plist in SmartTubeApp/SmartTubeApp/Info.plist SmartTubeApp/SmartTubeTVApp/Info.plist; do
+  perl -0pi -e 's#(<key>CFBundleDisplayName</key>\s*<string>)[^<]*(</string>)#${1}SmartTube JP${2}#' "$plist"
+done
 printf 'SMARTTUBE_TEAM_ID = %s\nSMARTTUBE_TV_TEAM_ID = %s\n' "$TEAM" "$TEAM" > SmartTubeApp/Config/Secrets.xcconfig
 # the project copies GoogleService-Info.plist; the placeholder keeps Firebase off at runtime
 # (CrashlyticsLogger.hasFirebaseConfig)
