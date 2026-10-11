@@ -180,6 +180,7 @@ extension TOSPlayerViewModel {
             let t = (json["t"] as? Double) ?? 0
             let s = (json["state"] as? Int) ?? 999
             currentTime = t
+            updateDualSubtitles(at: t)
             // "ready" fires on the very first poll, before video.duration has
             // necessarily loaded (the video starts muted for autoplay-policy
             // reasons, so metadata can lag a poll or two) — confirmed live:

@@ -226,6 +226,12 @@ final class TOSPlayerViewModel: NSObject {
     /// Stored handle for the in-flight fetchSponsorSegments Task. Cancelled on full dismiss
     /// to prevent a late @Observable mutation after TOSPlayerView teardown.
     var sponsorTask: Task<Void, Never>?
+    /// Dual subtitles (Japanese + translation) drawn over the embed by TOSPlayerView —
+    /// see TOSPlayerViewModel+DualSubtitles.swift.
+    let captionsManager = CaptionsManager()
+    var dualSubtitlesTask: Task<Void, Never>?
+    /// Whether the embed's own caption window has been hidden (ours are showing).
+    var embedCaptionsHidden = false
     /// Stored handle for the in-flight fetchRelatedVideos Task. Cancelled on full dismiss
     /// to prevent a late @Observable mutation after TOSPlayerView teardown.
     var navigationTask: Task<Void, Never>?
@@ -468,6 +474,8 @@ final class TOSPlayerViewModel: NSObject {
     /// is torn down — which would trigger a SwiftUI body re-evaluation crash (a013be1c).
     func cancel() {
         sponsorTask?.cancel()
+        dualSubtitlesTask?.cancel()
+        captionsManager.cancel()
         navigationTask?.cancel()
     }
 

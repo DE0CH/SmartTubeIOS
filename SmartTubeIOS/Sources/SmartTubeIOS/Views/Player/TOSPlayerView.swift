@@ -248,6 +248,20 @@ public struct TOSPlayerView: View {
                     )
                     .ignoresSafeArea()
 
+                    // Dual subtitles (Japanese + translation) over the embed; touches pass
+                    // through to YouTube's controls underneath.
+                    if let cue = vm.captionsManager.currentCaptionCue {
+                        VStack(spacing: 0) {
+                            Spacer()
+                            DualCaptionCueView(
+                                cue: cue, furigana: store.settings.dualSubtitlesEnabled && store.settings.furiganaEnabled
+                            )
+                            .padding(.bottom, 48)
+                        }
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .allowsHitTesting(false)
+                    }
+
                     #if os(iOS)
                     // Keep WebKit visible for YouTube's player checks, but cover its
                     // white startup paints with a video-appropriate background.
@@ -374,6 +388,7 @@ public struct TOSPlayerView: View {
             }
             .onAppear {
                 vm.updateSettings(store.settings)
+                vm.loadDualSubtitles()
                 // #51/#78: without this, WatchtimeTracker's pings carry no auth
                 // header even for signed-in users, so playback through the TOS
                 // player (the iOS default since 4.6) never registers in YouTube's
