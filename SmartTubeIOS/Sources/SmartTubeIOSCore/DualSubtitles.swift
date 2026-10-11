@@ -197,7 +197,7 @@ public enum Furigana {
         let ns = text as NSString
         let cf = text as CFString
         let tokenizer = CFStringTokenizerCreate(
-            nil, cf, CFRangeMake(0, ns.length), kCFStringTokenizerUnitWordBoundary, CFLocaleCreate(nil, "ja" as CFString))
+            nil, cf, CFRangeMake(0, ns.length), kCFStringTokenizerUnitWordBoundary, Locale(identifier: "ja") as CFLocale)
         var out: [FuriganaSegment] = []
         var pos = 0
         while !CFStringTokenizerAdvanceToNextToken(tokenizer).isEmpty {
