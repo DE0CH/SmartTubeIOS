@@ -36,8 +36,11 @@ jobs:
         working-directory: SmartTubeIOS
         run: |
           set -o pipefail
+          mkdir -p ../out/snapshots
+          TEST_RUNNER_DUAL_SNAPSHOT_DIR="$PWD/../out/snapshots" \
           xcodebuild test -scheme SmartTubeIOS-Package -destination "platform=iOS Simulator,name=$SIM" \
             -only-testing:SmartTubeIOSTests/DualSubtitlesTests -only-testing:SmartTubeIOSTests/CaptionsManagerTests \
+            -only-testing:SmartTubeIOSTests/DualCaptionCueViewSnapshotTests \
             CODE_SIGNING_ALLOWED=NO 2>&1 | tee ../unit.log | grep -E "error:|✔|✘|Test run|passed|failed|\*\* " || true
           grep -qE "\*\* TEST SUCCEEDED|Test run with .* passed" ../unit.log
       - name: Build the app for the simulator
@@ -52,11 +55,8 @@ jobs:
           xcodebuild build -workspace SmartTube.xcworkspace -scheme "Smart Tube" -destination "generic/platform=tvOS Simulator" \
             -derivedDataPath dd-tv CODE_SIGNING_ALLOWED=NO 2>&1 | tee build-tv.log | grep -E "error:|\*\* " || true
           grep -q "BUILD SUCCEEDED" build-tv.log
-      - name: Play a Japanese video, screenshot the captions
-        timeout-minutes: 12
-        env:
-          E2E_PROXY_USER: ${{ secrets.E2E_PROXY_USER }}
-          E2E_PROXY_PASS: ${{ secrets.E2E_PROXY_PASS }}
+      - name: Launch smoke test (the app starts and opens the player; no playback on the runner's IP)
+        timeout-minutes: 10
         run: |
           mkdir -p out
           t() { local n=$1; shift; echo "+ $*"; perl -e 'alarm shift; exec @ARGV' "$n" "$@" || echo "  (exit $?)"; }
@@ -65,24 +65,12 @@ jobs:
           app=$(ls -d dd/Build/Products/Debug-iphonesimulator/SmartTube.app)
           t 120 xcrun simctl install "$SIM" "$app"
           bid=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app/Info.plist"); echo "bundle id $bid"
-          # YouTube refuses playback to the runner's datacenter IP: send the Mac (and so the simulator)
-          # through a residential proxy for this check, set only after boot + install
-          if [ -n "$E2E_PROXY_USER" ]; then
-            umask 077; printf '%s\n%s\n' "$E2E_PROXY_USER" "$E2E_PROXY_PASS" > "$RUNNER_TEMP/proxy.cred"; umask 022
-            nohup node scripts/de0ch/authproxy.mjs "$RUNNER_TEMP/proxy.cred" > out/proxy.log 2>&1 &
-            sleep 2
-            t 30 curl -s -m 20 -x http://127.0.0.1:18080 https://ipinfo.io/country
-            networksetup -listallnetworkservices | tail -n +2 | grep -v '^\*' | while read -r svc; do
-              t 20 sudo networksetup -setsecurewebproxy "$svc" 127.0.0.1 18080 off
-            done
-          fi
-          nohup xcrun simctl spawn "$SIM" log stream --style compact --predicate "subsystem BEGINSWITH 'dev.de0ch'" > out/app.log 2>&1 &
           # the app's own deep-link launch argument (simctl openurl stops at an "Open in…?" prompt)
           t 60 xcrun simctl launch "$SIM" "$bid" "--uitesting-deeplink-video=$VIDEO"
-          for i in $(seq 1 12); do sleep 10; t 30 xcrun simctl io "$SIM" screenshot "out/shot-$i.png" > /dev/null; done
-          networksetup -listallnetworkservices | tail -n +2 | grep -v '^\*' | while read -r svc; do
-            t 20 sudo networksetup -setsecurewebproxystate "$svc" off
-          done
+          sleep 30
+          t 30 xcrun simctl io "$SIM" screenshot out/launch.png > /dev/null
+          # still running = no crash at launch (Firebase stays off without a real plist)
+          t 30 xcrun simctl spawn "$SIM" launchctl list | grep -q "$bid"
       - name: Results
         if: always()
         uses: actions/upload-artifact@v4
