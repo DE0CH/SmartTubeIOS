@@ -10,7 +10,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 TEAM=S64YL394S3
-git ls-files -z -- . ':!scripts/de0ch' | xargs -0 grep -lIZ -e 'com\.void\.smarttube' -e '5A4JA438MW' \
+# --null, not -Z: on the macOS runner's BSD grep, -Z means "decompress"
+git ls-files -z -- . ':!scripts/de0ch' | xargs -0 grep -lI --null -e 'com\.void\.smarttube' -e '5A4JA438MW' \
   | xargs -0 perl -pi -e 's/com\.void\.smarttube/dev.de0ch.smarttube/g; s/5A4JA438MW/'"$TEAM"'/g'
 perl -pi -e 's/INFOPLIST_KEY_CFBundleDisplayName = "Smart Tube";/INFOPLIST_KEY_CFBundleDisplayName = "SmartTube JP";/g' \
   SmartTubeApp/SmartTubeApp.xcodeproj/project.pbxproj
@@ -22,4 +23,8 @@ printf 'SMARTTUBE_TEAM_ID = %s\nSMARTTUBE_TV_TEAM_ID = %s\n' "$TEAM" "$TEAM" > S
 # (CrashlyticsLogger.hasFirebaseConfig)
 cp SmartTubeApp/SmartTubeApp/GoogleService-Info.plist.example SmartTubeApp/SmartTubeApp/GoogleService-Info.plist
 ruby "$ROOT/scripts/de0ch/drop-watch.rb" SmartTubeApp/SmartTubeApp.xcodeproj
+# fail loudly if anything was missed
+if git grep -q 'com\.void\.smarttube' -- SmartTubeApp; then
+  echo "identity: com.void.smarttube still present in:" >&2; git grep -l 'com\.void\.smarttube' -- SmartTubeApp >&2; exit 1
+fi
 echo "identity applied: dev.de0ch.smarttube.*, team $TEAM"

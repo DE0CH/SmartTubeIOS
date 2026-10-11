@@ -52,6 +52,21 @@ jobs:
           xcodebuild build -workspace SmartTube.xcworkspace -scheme "Smart Tube" -destination "generic/platform=tvOS Simulator" \
             -derivedDataPath dd-tv CODE_SIGNING_ALLOWED=NO 2>&1 | tee build-tv.log | grep -E "error:|\*\* " || true
           grep -q "BUILD SUCCEEDED" build-tv.log
+      - name: Residential proxy for the simulator (YouTube refuses playback to the runner's IP)
+        env:
+          E2E_PROXY_USER: ${{ secrets.E2E_PROXY_USER }}
+          E2E_PROXY_PASS: ${{ secrets.E2E_PROXY_PASS }}
+        run: |
+          [ -n "$E2E_PROXY_USER" ] || { echo "no E2E_PROXY_* secrets: the check runs on the runner's own IP"; exit 0; }
+          umask 077; printf '%s\n%s\n' "$E2E_PROXY_USER" "$E2E_PROXY_PASS" > "$RUNNER_TEMP/proxy.cred"
+          nohup node scripts/de0ch/authproxy.mjs "$RUNNER_TEMP/proxy.cred" > /dev/null 2>&1 &
+          sleep 2
+          curl -s -m 20 -x http://127.0.0.1:18080 https://ipinfo.io/country || true
+          # the simulator uses the Mac's system proxy settings
+          networksetup -listallnetworkservices | tail -n +2 | grep -v '^\*' | while read -r svc; do
+            sudo networksetup -setwebproxy "$svc" 127.0.0.1 18080 off || true
+            sudo networksetup -setsecurewebproxy "$svc" 127.0.0.1 18080 off || true
+          done
       - name: Play a Japanese video, screenshot the captions
         run: |
           mkdir -p out
